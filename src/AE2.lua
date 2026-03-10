@@ -8,6 +8,24 @@ local itemCache = {}
 local cacheTimestamp = 0
 local CACHE_DURATION = 600 -- 10 minutes
 
+function dump(o, depth)
+    depth = depth or 0
+    if depth > 10 then return "..." end
+
+    if type(o) == 'table' then
+        local t = {"{ "}
+        for k, v in pairs(o) do
+            if type(k) ~= 'number' then k = '"' .. k .. '"' end
+            t[#t + 1] = '[' .. k .. '] = ' .. dump(v, depth + 1) .. ',\n'
+        end
+        t[#t + 1] = '} '
+        return table.concat(t)
+    else
+        return tostring(o)
+    end
+end
+
+
 -- Returns a table of CPU statuses: {isBusy=true/false, name=string, craftingLabel=string|nil}
 function AE2.getCpuStatus()
   local cpus = {}
@@ -106,38 +124,31 @@ function AE2.requestItem(name, data, threshold, count)
     
     -- Detect if this is a fluid drop
     local isFluid = isFluidDrop(name)
-    
+
     if isFluid then
-      local fluidName = extractFluidName(name)
-      
-      if data and data.fluid_tag then
-        local fluidTag = '{Fluid:' .. data.fluid_tag .. '}'
-        itemInSystem = ME.getItemInNetwork("ae2fc:fluid_drop", 0, fluidTag)
-      else
-        local fluidTag = '{Fluid:' .. fluidName .. '}'
-        itemInSystem = ME.getItemInNetwork("ae2fc:fluid_drop", 0, fluidTag)
-      end
-      
+      stack = craftable.getStack()
+      itemInSystem = ME.getFluidInNetwork(stack.name)
+
       if itemInSystem then
-        currentStock = itemInSystem.size or 0
+        currentStock = itemInSystem.amount or 0
       end
     else
-      local item = craftable.getItemStack()
+      local item = craftable.getStack()
       
       if item and item.name then
         if data and data.item_id then
           local itemName = data.item_id
-          local itemDamage = tonumber(data.item_meta) or 0
+          local itemDamage = data.item_meta or 0
           itemInSystem = ME.getItemInNetwork(itemName, itemDamage)
         else
-          local damage = tonumber(item.damage) or 0
-          
+          -- Try with tag first
           if item.tag then
-            itemInSystem = ME.getItemInNetwork(item.name, damage, item.tag)
+            itemInSystem = ME.getItemInNetwork(item.name, item.damage or 0, item.tag)
           end
           
+          -- Fallback: try without tag
           if itemInSystem == nil then
-            itemInSystem = ME.getItemInNetwork(item.name, damage)
+            itemInSystem = ME.getItemInNetwork(item.name, item.damage or 0)
           end
         end
         
